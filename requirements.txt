@@ -1,0 +1,8 @@
+diffusers==0.21.2
+discord.py==2.3.2
+numpy==1.24.4
+omegaconf==2.2.3
+Pillow==10.0.1
+requests==2.31.0
+torch==2.0.1
+torchvision==0.15.2
