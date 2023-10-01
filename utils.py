@@ -1,8 +1,10 @@
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
-from torchvision.transforms import ToTensor, ToPILImage
+from torchvision.transforms import ToTensor
+from pipeline import AllInOnePipeline
 from dataclasses import dataclass
 from termcolor import colored
 from torch import Generator
+from PIL import Image
 import numpy as np
 import discord
 import asyncio
@@ -10,7 +12,6 @@ import torch
 import os
 
 to_tensor = ToTensor()
-to_pil = ToPILImage()
 
 # factors for fast latent decoding
 rgb_latent_factors = torch.Tensor(
@@ -24,7 +25,7 @@ rgb_latent_factors = torch.Tensor(
 
 
 @dataclass(frozen=True)
-class GenerationRequest:
+class BaseGenerationRequest:
     interaction: discord.Interaction
     model: str
     prompt: str
@@ -32,8 +33,36 @@ class GenerationRequest:
     guidance_scale: float
     step_count: int
     seed: int
+
+
+@dataclass(frozen=True)
+class Text2ImgGenerationRequest(BaseGenerationRequest):
     width: int
     height: int
+
+    ptype = "text2img"
+
+
+@dataclass(frozen=True)
+class Img2ImgGenerationRequest(BaseGenerationRequest):
+    image: Image.Image
+
+    ptype = "img2img"
+
+
+@dataclass(frozen=True)
+class InpaintGenerationRequest(BaseGenerationRequest):
+    mask: Image.Image
+
+    ptype = "inpaint"
+
+
+GenerationRequest = (
+    BaseGenerationRequest
+    | Text2ImgGenerationRequest
+    | Img2ImgGenerationRequest
+    | InpaintGenerationRequest
+)
 
 
 def error(msg):
@@ -64,55 +93,31 @@ def edit(
 def load_model(
     model_path: str,
     device: str,
+    pipe_setup_func,
     embeddings: list[str] = [],
     loras: list[str] = [],
 ):
-    factory_func = (
-        StableDiffusionPipeline.from_single_file
-        if model_path.endswith(".safetensors")
-        else StableDiffusionPipeline.from_pretrained
-    )
-    pipeline = factory_func(
+    return AllInOnePipeline(
         model_path,
+        device,
+        pipe_setup_func,
+        embeddings,
+        loras,
         custom_pipeline="lpw_stable_diffusion",
-        # torch_dtype=torch.float16,
     )
-    pipeline = pipeline.to(device)
-
-    if device == "mps":
-        pipeline.enable_attention_slicing()
-
-    # disable safety checker
-    pipeline.orig_safety_checker = pipeline.safety_checker
-    pipeline.safety_checker = None
-
-    pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
-        pipeline.scheduler.config,
-        use_karras_sigmas=True,
-    )
-
-    for embed in embeddings:
-        fn = os.path.basename(embed).split(".")[0]
-        pipeline.load_textual_inversion(embed, token=fn)
-
-    for lora in loras:
-        pipeline.load_lora_weights(lora)
-
-    return pipeline
 
 
 def load_models(
     models: dict[str, str],
     device: str,
+    pipe_setup_func,
     embeddings: list[str] = [],
     loras: list[str] = [],
-) -> dict[str, StableDiffusionPipeline]:
-    models = models.copy()
-
-    for key, path in models.items():
-        models[key] = load_model(path, device, embeddings, loras)
-
-    return models
+) -> dict[str, AllInOnePipeline]:
+    return {
+        key: load_model(path, device, pipe_setup_func, embeddings, loras)
+        for key, path in models.items()
+    }
 
 
 def create_torch_generator(seed: int | None = None, device: str = "cpu") -> Generator:
@@ -132,7 +137,7 @@ def path_join(paths: list[str], sep: str = ";") -> str:
 
 def fast_decode(latent: torch.Tensor):
     image = latent.permute(1, 2, 0).cpu() @ rgb_latent_factors
-    return to_pil((255 * image).numpy().astype(np.uint8))
+    return Image.fromarray((255 * image).numpy().astype(np.uint8))
 
 
 def check_img_nsfw(pipeline: StableDiffusionPipeline, image) -> bool | None:

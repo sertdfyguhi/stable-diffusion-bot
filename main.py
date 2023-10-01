@@ -36,6 +36,7 @@ logger.info("Loading models...")
 models = utils.load_models(
     config.MODEL_PATHS,
     device=config.DEVICE,
+    pipe_setup_func=config.pipeline_setup,
     embeddings=config.EMBEDDINGS,
     loras=config.LORAS,
 )
@@ -106,20 +107,30 @@ def generate(loop):
                 raise GenerationExit()
 
         generator = utils.create_torch_generator(req.seed)
-        pipeline = models[req.model]
+        pipeline = getattr(models[req.model], req.ptype)
+        base_kwargs = {
+            "prompt": req.prompt,
+            "negative_prompt": req.negative_prompt,
+            "guidance_scale": req.guidance_scale,
+            "num_inference_steps": req.step_count,
+            "generator": generator,
+            "callback": callback,
+        }
 
         try:
-            image = pipeline(
-                prompt=req.prompt,
-                negative_prompt=req.negative_prompt,
-                guidance_scale=req.guidance_scale,
-                num_inference_steps=req.step_count,
-                width=req.width,
-                height=req.height,
-                generator=generator,
-                callback=callback,
-                # cross_attention_kwargs={"scale": lora_scale},
-            ).images[0]
+            match req.ptype:
+                case "text2img":
+                    image = pipeline(
+                        **base_kwargs,
+                        width=req.width,
+                        height=req.height,
+                    ).images[0]
+
+                case "img2img":
+                    image = pipeline(**base_kwargs, image=req.image).images[0]
+
+                case "inpaint":
+                    image = pipeline(**base_kwargs, image=req.mask).images[0]
         except GenerationExit:
             continue
         except Exception as e:
@@ -201,8 +212,8 @@ async def stop_current_gen():
 
 
 # create discord commands
-@tree.command(name="generate", description="Generates an image.")
-async def generate_cmd(
+@tree.command(name="text2img", description="Generates an image using text2img.")
+async def text2img_cmd(
     interaction: discord.Interaction,
     model: str,
     prompt: str,
@@ -226,13 +237,13 @@ async def generate_cmd(
         return await interaction.response.send_message(
             utils.error(f"Width cannot be higher than {config.MAX_WIDTH} pixels.")
         )
-    elif width > config.MAX_HEIGHT:
+    elif height > config.MAX_HEIGHT:
         return await interaction.response.send_message(
             utils.error(f"Height cannot be higher than {config.MAX_HEIGHT} pixels.")
         )
 
     queue.append(
-        utils.GenerationRequest(
+        utils.Text2ImgGenerationRequest(
             interaction,
             model,
             prompt,
