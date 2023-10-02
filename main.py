@@ -13,6 +13,7 @@ import io
 import os
 
 
+# logging setup
 format_str = f"[%(asctime)s] {utils.bold('%(levelname)s')} :: {utils.bold('%(name)s')} - %(message)s"
 logging.basicConfig(
     level=logging.DEBUG,
@@ -22,8 +23,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # load config embed colors
-progress_embed_color = utils.get_embed_color(config.PROGRESS_EMBED_COLOR)
-result_embed_color = utils.get_embed_color(config.RESULT_EMBED_COLOR)
+primary_embed_color = utils.get_embed_color(config.PRIMARY_EMBED_COLOR)
+secondary_embed_color = utils.get_embed_color(config.SECONDARY_EMBED_COLOR)
 
 # client setup
 intents = discord.Intents.default()
@@ -77,16 +78,11 @@ def generate(loop):
 
             embed = discord.Embed(
                 title=f"Generating... ({step}/{req.step_count})",
-                color=progress_embed_color,
+                color=secondary_embed_color,
             )
             embed.set_image(url="attachment://preview.png")
-            utils.add_fields(
-                embed,
-                {
-                    "Step Time": f"{now - last_step_time:.2f}s",
-                    "ETA": f"{eta:.2f}s",
-                },
-            )
+            embed.add_field(name="Step Time", value=f"{now - last_step_time:.2f}s")
+            embed.add_field(name="ETA", value=f"{eta:.2f}s")
 
             # use bytesio to avoid saving image to disk
             with io.BytesIO() as img_bin:
@@ -164,7 +160,7 @@ def generate(loop):
         # create embed
         embed = discord.Embed(
             title=f"Generated Image (Total Time: {time.time() - start_time:.2f}s)",
-            color=result_embed_color,
+            color=primary_embed_color,
         )
 
         author = req.interaction.user
@@ -215,39 +211,41 @@ async def stop_current_gen():
 
 # create discord commands
 for module in pipelines.commands:
+    # wrapper avoids module being overwritten by subsequent iterations
+    def wrapper(module):
+        async def command(interaction: discord.Interaction, *args, **kwargs):
+            global current_user_id
 
-    async def command(interaction: discord.Interaction, *args, **kwargs):
-        global current_user_id
+            try:
+                res = module.handle(interaction, *args, **kwargs)
+            except Exception as e:
+                return await interaction.response.send_message(utils.error(e))
 
-        try:
-            res = module.handle(interaction, *args, **kwargs)
-        except Exception as e:
-            return await interaction.response.send_message(utils.error(e))
-
-        if type(res) == str:
-            return await interaction.response.send_message(res)
-
-        # validate parameters
-        if res.model not in models:
-            return await interaction.response.send_message(
-                utils.error(
-                    f'No model named "{res.model}", only options are: `{"`, `".join(models.keys())}`.'
+            # validate parameters
+            if res.model not in models:
+                return await interaction.response.send_message(
+                    utils.error(
+                        f'No model named "{res.model}". List all available models using /models.'
+                    )
                 )
-            )
 
-        queue.append(res)
+            queue.append(res)
 
-        if current_user_id:
-            return await interaction.response.send_message(
-                f"Currently generating, you are {len(queue) + 1} in the queue."
-            )
+            if current_user_id:
+                return await interaction.response.send_message(
+                    f"Currently generating, you are {len(queue) + 1} in the queue."
+                )
 
-        await interaction.response.send_message("Starting generation...")
-        logger.info("Starting generation...")
+            await interaction.response.send_message("Starting generation...")
+            logger.info("Starting generation...")
 
-        current_user_id = interaction.user.id
-        thread = Thread(target=generate, args=(asyncio.get_event_loop(),))
-        thread.start()
+            current_user_id = interaction.user.id
+            thread = Thread(target=generate, args=(asyncio.get_event_loop(),))
+            thread.start()
+
+        return command
+
+    command = wrapper(module)
 
     # update function signature to have same params as handle functions
     command.__signature__ = inspect.signature(module.handle)
@@ -280,6 +278,17 @@ async def stop_all_cmd(interaction: discord.Interaction):
         await stop_current_gen()
 
     await interaction.edit_original_response(content="Stopped.")
+
+
+@tree.command(name="models", description="Lists all available models.")
+async def models_cmd(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="Models Available",
+        description="- " + "\n- ".join(models.keys()),
+        color=primary_embed_color,
+    )
+
+    await interaction.response.send_message(embed=embed)
 
 
 @client.event

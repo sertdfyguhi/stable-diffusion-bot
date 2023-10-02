@@ -1,4 +1,4 @@
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionPipeline
 from torchvision.transforms import ToTensor
 from pipeline import AllInOnePipeline
 from dataclasses import dataclass
@@ -9,7 +9,6 @@ import numpy as np
 import discord
 import asyncio
 import torch
-import os
 
 to_tensor = ToTensor()
 

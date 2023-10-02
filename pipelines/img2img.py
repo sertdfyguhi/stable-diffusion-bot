@@ -24,14 +24,14 @@ def handle(
     try:
         image = Image.open(io.BytesIO(image_bytes))
     except UnidentifiedImageError:
-        return utils.error("URL response could not be read as an image.")
+        raise ValueError("URL response could not be read as an image.")
 
     if image.width > config.MAX_WIDTH:
-        return utils.error(
+        raise ValueError(
             f"Image width cannot be higher than {config.MAX_WIDTH} pixels."
         )
     elif image.height > config.MAX_HEIGHT:
-        return utils.error(
+        raise ValueError(
             f"Image height cannot be higher than {config.MAX_HEIGHT} pixels."
         )
 
