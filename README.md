@@ -4,7 +4,8 @@ A discord bot for stable diffusion image generation using diffusers.
 
 # Commands
 
-- /generate: Generates an image using a prompt.
+- /text2img: Generates an image using a text2img.
+- /img2img: Generates an image using a img2img.
 - /stop: Stops current generation.
 - /stop_all: Stops all generations requested by user.
 
