@@ -21,9 +21,7 @@ class AllInOnePipeline:
             if path.endswith(".safetensors")
             else StableDiffusionPipeline.from_pretrained
         )
-
         self.text2img = factory_func(path, **kwargs).to(device)
-        pipe_setup_func(self.text2img)
 
         # load embeddings and loras
         for embed in embeddings:
@@ -32,6 +30,8 @@ class AllInOnePipeline:
 
         for lora in loras:
             self.text2img.load_lora_weights(lora)
+
+        pipe_setup_func(self.text2img)
 
         self.img2img = StableDiffusionImg2ImgPipeline(**self.text2img.components).to(
             device

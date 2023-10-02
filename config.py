@@ -38,3 +38,10 @@ def pipeline_setup(pipeline):
     # DO NOT REMOVE unless you have >=64gb of ram
     if DEVICE == "mps":
         pipeline.enable_attention_slicing()
+
+    # replaces and saves safety checker in another variable
+    # so it doesn't return a black image when nsfw content
+    # is detected while allowing for spoilers when nsfw
+    # DO NOT REMOVE unless you want a black image
+    pipeline.orig_safety_checker = pipeline.safety_checker
+    pipeline.safety_checker = None
