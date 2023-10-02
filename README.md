@@ -31,6 +31,7 @@ py main.py
 
 # Todo
 
-- [ ] Img2Img generation
+- [x] Img2img generation
+- [ ] Resizing input image in img2img
 - [ ] Upscaling image
 - [ ] Inpaint generation

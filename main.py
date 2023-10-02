@@ -1,8 +1,10 @@
 from PIL.PngImagePlugin import PngInfo
 from threading import Thread
+import pipelines
 import traceback
 import discord
 import asyncio
+import inspect
 import logging
 import config
 import utils
@@ -150,7 +152,7 @@ def generate(loop):
         pnginfo.add_text("step_count", str(req.step_count))
         pnginfo.add_text("seed", str(gen_seed))
         pnginfo.add_text("model", config.MODEL_PATHS[req.model])
-        pnginfo.add_text("pipeline", "Text2Img")
+        pnginfo.add_text("pipeline", req.ptype)
         pnginfo.add_text("scheduler", "DPMSolverMultistepScheduler Karras++")
         pnginfo.add_text("embeddings", utils.path_join(config.EMBEDDINGS))
         pnginfo.add_text("loras", utils.path_join(config.LORAS))
@@ -178,7 +180,7 @@ def generate(loop):
                 "Step Count": req.step_count,
                 "Scheduler / Sampler": "DPMSolverMultistepScheduler Karras++",
                 "Seed": gen_seed,
-                "Size": f"{req.width}x{req.height}",
+                "Size": f"{image.width}x{image.height}",
             },
         )
 
@@ -212,61 +214,44 @@ async def stop_current_gen():
 
 
 # create discord commands
-@tree.command(name="text2img", description="Generates an image using text2img.")
-async def text2img_cmd(
-    interaction: discord.Interaction,
-    model: str,
-    prompt: str,
-    negative_prompt: str = "",
-    guidance_scale: float = 8.0,
-    step_count: int = 14,
-    seed: int = None,
-    width: int = 512,
-    height: int = 680,
-):
-    global current_user_id
+for module in pipelines.commands:
 
-    # validate parameters
-    if model not in models:
-        return await interaction.response.send_message(
-            utils.error(
-                f'No model named "{model}", only options are: `{"`, `".join(models.keys())}`.'
+    async def command(interaction: discord.Interaction, *args, **kwargs):
+        global current_user_id
+
+        try:
+            res = module.handle(interaction, *args, **kwargs)
+        except Exception as e:
+            return await interaction.response.send_message(utils.error(e))
+
+        if type(res) == str:
+            return await interaction.response.send_message(res)
+
+        # validate parameters
+        if res.model not in models:
+            return await interaction.response.send_message(
+                utils.error(
+                    f'No model named "{res.model}", only options are: `{"`, `".join(models.keys())}`.'
+                )
             )
-        )
-    elif width > config.MAX_WIDTH:
-        return await interaction.response.send_message(
-            utils.error(f"Width cannot be higher than {config.MAX_WIDTH} pixels.")
-        )
-    elif height > config.MAX_HEIGHT:
-        return await interaction.response.send_message(
-            utils.error(f"Height cannot be higher than {config.MAX_HEIGHT} pixels.")
-        )
 
-    queue.append(
-        utils.Text2ImgGenerationRequest(
-            interaction,
-            model,
-            prompt,
-            negative_prompt,
-            guidance_scale,
-            step_count,
-            seed,
-            width,
-            height,
-        )
-    )
+        queue.append(res)
 
-    if current_user_id:
-        return await interaction.response.send_message(
-            f"Currently generating, you are {len(queue) + 1} in the queue."
-        )
+        if current_user_id:
+            return await interaction.response.send_message(
+                f"Currently generating, you are {len(queue) + 1} in the queue."
+            )
 
-    await interaction.response.send_message("Starting generation...")
-    logger.info("Starting generation...")
+        await interaction.response.send_message("Starting generation...")
+        logger.info("Starting generation...")
 
-    current_user_id = interaction.user.id
-    thread = Thread(target=generate, args=(asyncio.get_event_loop(),))
-    thread.start()
+        current_user_id = interaction.user.id
+        thread = Thread(target=generate, args=(asyncio.get_event_loop(),))
+        thread.start()
+
+    # update function signature to have same params as handle functions
+    command.__signature__ = inspect.signature(module.handle)
+    tree.command(name=module.NAME, description=module.DESCRIPTION)(command)
 
 
 @tree.command(name="stop", description="Stops generation.")
@@ -303,4 +288,5 @@ async def on_ready():
     logger.info(f"Logged in as {client.user}.")
 
 
-client.run(config.TOKEN)
+if __name__ == "__main__":
+    client.run(config.TOKEN)
