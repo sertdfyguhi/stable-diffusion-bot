@@ -18,6 +18,7 @@ def handle(
     guidance_scale: float = 8.0,
     step_count: int = 14,
     seed: int = None,
+    downscale_factor: int = 1,
 ):
     image_bytes = requests.get(image_url, headers={"Accept": "image/*"}).content
 
@@ -26,13 +27,18 @@ def handle(
     except UnidentifiedImageError:
         raise ValueError("URL response could not be read as an image.")
 
+    # downscale image by factor
+    new_width = int(image.size[0] / downscale_factor)
+    new_height = int(image.size[1] / downscale_factor)
+    image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
     if image.width > config.MAX_WIDTH:
         raise ValueError(
-            f"Image width cannot be higher than {config.MAX_WIDTH} pixels."
+            f"Image width ({image.size[0]}x{image.size[1]}) cannot be higher than {config.MAX_WIDTH} pixels."
         )
     elif image.height > config.MAX_HEIGHT:
         raise ValueError(
-            f"Image height cannot be higher than {config.MAX_HEIGHT} pixels."
+            f"Image height ({image.size[0]}x{image.size[1]}) cannot be higher than {config.MAX_HEIGHT} pixels."
         )
 
     return utils.Img2ImgGenerationRequest(

@@ -19,9 +19,13 @@ def handle(
 ):
     # validate parameters
     if width > config.MAX_WIDTH:
-        return ValueError(f"Width cannot be higher than {config.MAX_WIDTH} pixels.")
+        return ValueError(
+            f"Width ({width}) cannot be higher than {config.MAX_WIDTH} pixels."
+        )
     elif height > config.MAX_HEIGHT:
-        return ValueError(f"Height cannot be higher than {config.MAX_HEIGHT} pixels.")
+        return ValueError(
+            f"Height ({height}) cannot be higher than {config.MAX_HEIGHT} pixels."
+        )
 
     return utils.Text2ImgGenerationRequest(
         interaction,
