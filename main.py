@@ -60,7 +60,7 @@ def generate(loop):
     global current_user_id
 
     while len(queue) > 0:
-        req = queue.pop()
+        req = queue.pop(0)
         interaction = req.interaction
 
         current_user_id = interaction.user.id
