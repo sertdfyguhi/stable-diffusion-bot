@@ -17,9 +17,12 @@ def handle(
     negative_prompt: str = "",
     guidance_scale: float = 8.0,
     step_count: int = 14,
-    seed: int = None,
+    seed: str = None,
     downscale_factor: int = 1,
 ):
+    if not seed.isnumeric():
+        return ValueError("Seed must be a number.")
+
     image_bytes = requests.get(image_url, headers={"Accept": "image/*"}).content
 
     try:
@@ -48,6 +51,6 @@ def handle(
         negative_prompt,
         guidance_scale,
         step_count,
-        seed,
+        int(seed),
         image,
     )

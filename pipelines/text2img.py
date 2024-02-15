@@ -13,7 +13,7 @@ def handle(
     negative_prompt: str = "",
     guidance_scale: float = 8.0,
     step_count: int = 14,
-    seed: int = None,
+    seed: str = None,
     width: int = 512,
     height: int = 680,
 ):
@@ -26,6 +26,8 @@ def handle(
         return ValueError(
             f"Height ({height}) cannot be higher than {config.MAX_HEIGHT} pixels."
         )
+    elif not seed.isnumeric():
+        return ValueError("Seed must be a number.")
 
     return utils.Text2ImgGenerationRequest(
         interaction,
@@ -34,7 +36,7 @@ def handle(
         negative_prompt,
         guidance_scale,
         step_count,
-        seed,
+        int(seed),
         width,
         height,
     )
