@@ -295,23 +295,33 @@ async def models_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
-@tree.command(name="upscale", description="Upscales an image from a message.")
-async def upscale_cmd(interaction: discord.Interaction, message_id: str):
+@tree.command(
+    name="upscale",
+    description="Upscales an image in a message. If ID is empty, the last message in the channel will be upscaled.",
+)
+async def upscale_cmd(interaction: discord.Interaction, message_id: str = None):
     if config.ESRGAN_MODEL is None:
         return await interaction.response.send_message(
             "Upscaling is disabled on this bot.", ephemeral=True
         )
 
-    try:
-        message = await interaction.channel.fetch_message(int(message_id))
-    except ValueError:
-        return await interaction.response.send_message(
-            "Message ID is not an ID.", ephemeral=True
-        )
-    except Exception:
-        return await interaction.response.send_message(
-            f"Could not find message {message_id}!", ephemeral=True
-        )
+    if message:
+        try:
+            message = await interaction.channel.fetch_message(int(message_id))
+        except ValueError:
+            return await interaction.response.send_message(
+                "Message ID is not an ID.", ephemeral=True
+            )
+        except Exception:
+            return await interaction.response.send_message(
+                f"Could not find message {message_id}!", ephemeral=True
+            )
+    else:
+        message = interaction.channel.last_message
+        if message is None:
+            return await interaction.response.send_message(
+                "No messages in channel.", ephemeral=True
+            )
 
     attachments = message.attachments
     if len(attachments) == 0:
