@@ -26,7 +26,7 @@ def handle(
         return ValueError(
             f"Height ({height}) cannot be higher than {config.MAX_HEIGHT} pixels."
         )
-    elif not seed.isnumeric():
+    elif seed and not seed.isnumeric():
         return ValueError("Seed must be a number.")
 
     return utils.Text2ImgGenerationRequest(

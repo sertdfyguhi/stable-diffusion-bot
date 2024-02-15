@@ -20,7 +20,7 @@ def handle(
     seed: str = None,
     downscale_factor: int = 1,
 ):
-    if not seed.isnumeric():
+    if seed and not seed.isnumeric():
         return ValueError("Seed must be a number.")
 
     image_bytes = requests.get(image_url, headers={"Accept": "image/*"}).content
