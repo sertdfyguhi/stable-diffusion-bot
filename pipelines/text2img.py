@@ -36,7 +36,7 @@ def handle(
         negative_prompt,
         guidance_scale,
         step_count,
-        int(seed),
+        int(seed) if seed else None,
         width,
         height,
     )
