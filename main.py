@@ -305,7 +305,7 @@ async def upscale_cmd(interaction: discord.Interaction, message_id: str = None):
             "Upscaling is disabled on this bot.", ephemeral=True
         )
 
-    if message:
+    if message_id:
         try:
             message = await interaction.channel.fetch_message(int(message_id))
         except ValueError:
