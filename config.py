@@ -8,6 +8,9 @@ SAVE_DIR = "saves"
 #     "hassaku": "models/hassaku.safetensors"
 # }
 MODEL_PATHS = {}
+UPSCALED_DIR = "upscaled"
+# path to esrgan model, None to disable
+ESRGAN_MODEL = None
 
 DEVICE = "cuda"
 

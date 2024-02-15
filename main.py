@@ -44,6 +44,10 @@ models = utils.load_models(
     loras=config.LORAS,
 )
 
+# load ESRGAN model
+if config.ESRGAN_MODEL:
+    esrgan = utils.load_esrgan_model(config.ESRGAN_MODEL, config.DEVICE)
+
 logger.info("Finished loading models.")
 
 
@@ -289,6 +293,83 @@ async def models_cmd(interaction: discord.Interaction):
     )
 
     await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="upscale", description="Upscales an image from a message.")
+async def upscale_cmd(interaction: discord.Interaction, message_id: str):
+    if config.ESRGAN_MODEL is None:
+        return await interaction.response.send_message(
+            "Upscaling is disabled on this bot.", ephemeral=True
+        )
+
+    try:
+        message = await interaction.channel.fetch_message(int(message_id))
+    except ValueError:
+        return await interaction.response.send_message(
+            "Message ID is not an ID.", ephemeral=True
+        )
+    except Exception:
+        return await interaction.response.send_message(
+            f"Could not find message {message_id}!", ephemeral=True
+        )
+
+    attachments = message.attachments
+    if len(attachments) == 0:
+        return await interaction.response.send_message(
+            f"There are no attachments attached to the message.", ephemeral=True
+        )
+
+    try:
+        attachment = next(
+            attachment
+            for attachment in attachments
+            if attachment.content_type.startswith("image")
+        )
+    except StopIteration:
+        return await interaction.response.send_message(
+            f"There are no images attached to the message.", ephemeral=True
+        )
+
+    await interaction.response.send_message("Upscaling...")
+    logger.info(f"Upscaling image on message {message_id}...")
+    image_bytes = await attachment.read()
+
+    def worker(loop):
+        start_time = time.time()
+
+        try:
+            upscaled = pipelines.esrgan.upscale(esrgan, image_bytes)
+        except Exception as e:
+            traceback.print_exc()
+            return utils.edit(loop, interaction, utils.error(e))
+
+        outpath = os.path.join(config.UPSCALED_DIR, f"{interaction.id}.png")
+        upscaled.save(outpath)
+
+        embed = discord.Embed(
+            title=f"Upscaled Image (Total Time: {time.time() - start_time:.2f}s)",
+            color=primary_embed_color,
+        )
+        embed.set_author(
+            name=interaction.user.display_name, icon_url=interaction.user.avatar.url
+        )
+        embed.set_image(url="attachment://upscaled.png")
+        utils.add_fields(
+            embed,
+            {
+                "Model": esrgan.model_name,
+                "Upscale": esrgan.scale,
+                "Size": f"{upscaled.width}x{upscaled.height}",
+            },
+        )
+
+        file = discord.File(outpath, "upscaled.png", spoiler=attachment.is_spoiler())
+        utils.edit(loop, interaction, embed=embed, attachments=[file])
+
+        logger.info(f"Finished upscaling image on message {message_id}.")
+
+    thread = Thread(target=worker, args=(asyncio.get_event_loop(),))
+    thread.start()
 
 
 @client.event

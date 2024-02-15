@@ -1,9 +1,10 @@
-diffusers==0.21.2
+basicsr==1.4.2
+diffusers==0.25.0
 discord.py==2.3.2
 numpy==1.24.4
-omegaconf==2.2.3
-Pillow==10.0.1
+Pillow==10.2.0
+realesrgan==0.3.0
 requests==2.31.0
-termcolor==2.3.0
-torch==2.0.1
-torchvision==0.15.2
+termcolor==2.4.0
+torch==2.1.2
+torchvision==0.16.2

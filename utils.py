@@ -1,6 +1,8 @@
+from basicsr.archs.rrdbnet_arch import RRDBNet
 from diffusers import StableDiffusionPipeline
 from torchvision.transforms import ToTensor
 from pipeline import AllInOnePipeline
+from realesrgan import RealESRGANer
 from dataclasses import dataclass
 from termcolor import colored
 from torch import Generator
@@ -9,6 +11,7 @@ import numpy as np
 import discord
 import asyncio
 import torch
+import os
 
 to_tensor = ToTensor()
 
@@ -77,7 +80,7 @@ def edit(
     interaction: discord.Interaction,
     msg: str = None,
     embed: discord.Embed = None,
-    attachments: [discord.File] = [],
+    attachments: list[discord.File] = [],
 ):
     asyncio.run_coroutine_threadsafe(
         interaction.edit_original_response(
@@ -117,6 +120,61 @@ def load_models(
         key: load_model(path, device, pipe_setup_func, embeddings, loras)
         for key, path in models.items()
     }
+
+
+def load_esrgan_model(
+    model_path: str,
+    device: str,
+    model_name: str = None,
+):
+    if model_name is None:
+        model_name = get_filename(model_path)
+
+    if model_name in [
+        "RealESRGAN_x4plus",
+        "RealESRNet_x4plus",
+    ]:  # x4 RRDBNet model
+        model = RRDBNet(
+            num_in_ch=3,
+            num_out_ch=3,
+            num_feat=64,
+            num_block=23,
+            num_grow_ch=32,
+            scale=4,
+        )
+        scale = 4
+    elif model_name == "RealESRGAN_x4plus_anime_6B":  # x4 RRDBNet model with 6 blocks
+        model = RRDBNet(
+            num_in_ch=3,
+            num_out_ch=3,
+            num_feat=64,
+            num_block=6,
+            num_grow_ch=32,
+            scale=4,
+        )
+        scale = 4
+    elif model_name == "RealESRGAN_x2plus":  # x2 RRDBNet model
+        model = RRDBNet(
+            num_in_ch=3,
+            num_out_ch=3,
+            num_feat=64,
+            num_block=23,
+            num_grow_ch=32,
+            scale=2,
+        )
+        scale = 2
+    else:
+        raise ValueError("Failed to determine RealESRGAN model type.")
+
+    model = RealESRGANer(
+        scale=scale,
+        device=device,
+        model_path=model_path,
+        model=model,
+    )
+    model.model_name = model_name
+
+    return model
 
 
 def create_torch_generator(seed: int | None = None, device: str = "cpu") -> Generator:
@@ -169,3 +227,7 @@ def get_embed_color(color: str | list | tuple) -> discord.Colour:
         return getattr(discord.Color, color)()
     else:
         return discord.Color.from_str(color)
+
+
+def get_filename(path: str) -> str:
+    return os.path.basename(path).split(".")[0]

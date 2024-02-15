@@ -3,7 +3,7 @@ from diffusers import (
     StableDiffusionImg2ImgPipeline,
     StableDiffusionInpaintPipeline,
 )
-import os
+import utils
 
 
 class AllInOnePipeline:
@@ -25,7 +25,7 @@ class AllInOnePipeline:
 
         # load embeddings and loras
         for embed in embeddings:
-            fn = os.path.basename(embed).split(".")[0]
+            fn = utils.get_filename(embed)
             self.text2img.load_textual_inversion(embed, token=fn)
 
         for lora in loras:
