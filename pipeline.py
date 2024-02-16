@@ -46,7 +46,7 @@ class AllInOnePipeline:
         )
         pipe_setup_func(self.img2img)
 
-        self.inpaint = StableDiffusionInpaintPipeline(**self.text2img.components).to(
-            device
-        )
-        pipe_setup_func(self.inpaint)
+        # self.inpaint = StableDiffusionInpaintPipeline(**self.text2img.components).to(
+        #     device
+        # )
+        # pipe_setup_func(self.inpaint)

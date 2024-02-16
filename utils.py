@@ -41,7 +41,7 @@ rgb_latent_factors = torch.Tensor(
 )
 
 
-@dataclass(frozen=True)
+@dataclass
 class BaseGenerationRequest:
     interaction: discord.Interaction
     model: str
@@ -52,7 +52,7 @@ class BaseGenerationRequest:
     seed: int
 
 
-@dataclass(frozen=True)
+@dataclass
 class Text2ImgGenerationRequest(BaseGenerationRequest):
     width: int
     height: int
@@ -60,14 +60,14 @@ class Text2ImgGenerationRequest(BaseGenerationRequest):
     ptype = "text2img"
 
 
-@dataclass(frozen=True)
+@dataclass
 class Img2ImgGenerationRequest(BaseGenerationRequest):
     image: Image.Image
 
     ptype = "img2img"
 
 
-@dataclass(frozen=True)
+@dataclass
 class InpaintGenerationRequest(BaseGenerationRequest):
     mask: Image.Image
 
@@ -156,7 +156,6 @@ def load_esrgan_model(
             num_grow_ch=32,
             scale=4,
         )
-        scale = 4
     elif model_name == "RealESRGAN_x4plus_anime_6B":  # x4 RRDBNet model with 6 blocks
         model = RRDBNet(
             num_in_ch=3,
@@ -166,7 +165,6 @@ def load_esrgan_model(
             num_grow_ch=32,
             scale=4,
         )
-        scale = 4
     elif model_name == "RealESRGAN_x2plus":  # x2 RRDBNet model
         model = RRDBNet(
             num_in_ch=3,
@@ -176,19 +174,18 @@ def load_esrgan_model(
             num_grow_ch=32,
             scale=2,
         )
-        scale = 2
     else:
-        raise ValueError("Failed to determine RealESRGAN model type.")
+        raise ValueError("Failed to determine ESRGAN model type.")
 
-    model = RealESRGANer(
-        scale=scale,
+    esrgan_model = RealESRGANer(
+        scale=model.scale,
         device=device,
         model_path=model_path,
         model=model,
     )
-    model.model_name = model_name
+    esrgan_model.model_name = model_name
 
-    return model
+    return esrgan_model
 
 
 def create_torch_generator(seed: int | None = None, device: str = "cpu") -> Generator:

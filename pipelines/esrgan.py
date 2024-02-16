@@ -1,11 +1,10 @@
 from realesrgan import RealESRGANer
 from PIL import Image
 import numpy as np
-import io
 
 
-def upscale(model: RealESRGANer, image_bytes: bytes, outscale: int = None):
-    image = np.array(Image.open(io.BytesIO(image_bytes)))
+def upscale(model: RealESRGANer, image: Image.Image, outscale: int = None):
+    image = np.array(image)
 
     try:
         output, _ = model.enhance(image, outscale=outscale)

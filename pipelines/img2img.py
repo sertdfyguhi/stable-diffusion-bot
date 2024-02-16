@@ -1,9 +1,8 @@
+from diffusers.utils.loading_utils import load_image
 from PIL import Image, UnidentifiedImageError
-import requests
 import discord
 import config
 import utils
-import io
 
 NAME = "img2img"
 DESCRIPTION = "Generates an image using img2img."
@@ -23,12 +22,12 @@ def handle(
     if seed and not seed.isnumeric():
         return ValueError("Seed must be a number.")
 
-    image_bytes = requests.get(image_url, headers={"Accept": "image/*"}).content
-
     try:
-        image = Image.open(io.BytesIO(image_bytes))
+        image = load_image(image_url)
     except UnidentifiedImageError:
         raise ValueError("URL response could not be read as an image.")
+    except ValueError:
+        raise ValueError("Invalid URL.")
 
     # downscale image by factor
     new_width = int(image.size[0] / downscale_factor)
