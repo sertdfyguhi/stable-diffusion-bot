@@ -176,7 +176,7 @@ def generate(loop):
         embed.set_image(url=f"attachment://{filename}")
 
         if stopped:
-            embed.set_footer("Generation stopped.")
+            embed.set_footer(text="Generation stopped.")
             stopped = False
 
         utils.add_fields(
@@ -246,7 +246,7 @@ for module in pipelines.commands:
 
             if current_user_id:
                 return await interaction.response.send_message(
-                    f"Currently generating, you are {len(queue) + 1} in the queue."
+                    f"Currently generating, you are {len(queue)} in the queue."
                 )
 
             await interaction.response.send_message("Starting generation...")
