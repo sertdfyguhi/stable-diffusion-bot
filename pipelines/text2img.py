@@ -10,7 +10,7 @@ def handle(
     interaction: discord.Interaction,
     model: str,
     prompt: str,
-    negative_prompt: str = "",
+    negative_prompt: str = None,
     guidance_scale: float = 8.0,
     step_count: int = 14,
     seed: str = None,

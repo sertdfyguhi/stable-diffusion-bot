@@ -14,11 +14,11 @@ def handle(
     model: str,
     image_url: str,
     prompt: str,
-    negative_prompt: str = "",
+    negative_prompt: str = None,
     guidance_scale: float = 8.0,
     step_count: int = 14,
     seed: str = None,
-    downscale_factor: int = 1,
+    downscale_factor: float = 1.0,
 ):
     if seed and not seed.isnumeric():
         return ValueError("Seed must be a number.")

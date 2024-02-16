@@ -1,10 +1,11 @@
 basicsr==1.4.2
-diffusers==0.25.0
+compel==2.0.2
+diffusers==0.26.3
 discord.py==2.3.2
 numpy==1.24.4
 Pillow==10.2.0
 realesrgan==0.3.0
 requests==2.31.0
 termcolor==2.4.0
-torch==2.1.2
-torchvision==0.16.2
+torch==2.2.0
+torchvision==0.17.0

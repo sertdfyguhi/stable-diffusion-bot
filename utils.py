@@ -1,3 +1,18 @@
+# https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/14186/
+# Hack to fix a changed import in torchvision 0.17+, which otherwise breaks
+# basicsr; see https://github.com/AUTOMATIC1111/stable-diffusion-webui/issues/13985
+import sys
+
+try:
+    import torchvision.transforms.functional_tensor  # noqa: F401
+except ImportError:
+    try:
+        import torchvision.transforms.functional as functional
+
+        sys.modules["torchvision.transforms.functional_tensor"] = functional
+    except ImportError:
+        pass  # shrug...
+
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from diffusers import StableDiffusionPipeline
 from torchvision.transforms import ToTensor
@@ -31,7 +46,7 @@ class BaseGenerationRequest:
     interaction: discord.Interaction
     model: str
     prompt: str
-    negative_prompt: str
+    negative_prompt: str | None
     guidance_scale: float
     step_count: int
     seed: int
@@ -105,7 +120,6 @@ def load_model(
         pipe_setup_func,
         embeddings,
         loras,
-        custom_pipeline="lpw_stable_diffusion",
     )
 
 

@@ -56,12 +56,8 @@ stopped = False
 queue: list[utils.GenerationRequest] = []
 
 
-class GenerationExit(Exception):
-    pass
-
-
 def generate(loop):
-    global current_user_id
+    global current_user_id, stopped
 
     while len(queue) > 0:
         req = queue.pop(0)
@@ -73,9 +69,9 @@ def generate(loop):
         start_time = last_step_time
 
         # generation callback to update interaction message
-        def callback(step, _, latents):
-            global stopped
+        def callback(pipe, step, timestep, cb_kwargs):
             nonlocal last_step_time
+            global stopped
 
             now = time.time()
             eta = (now - start_time) / (step + 1) * (req.step_count - step)
@@ -90,7 +86,7 @@ def generate(loop):
 
             # use bytesio to avoid saving image to disk
             with io.BytesIO() as img_bin:
-                preview = utils.fast_decode(latents[0])
+                preview = utils.fast_decode(cb_kwargs["latents"][0])
                 preview.save(img_bin, "png")
                 img_bin.seek(0)
 
@@ -103,20 +99,28 @@ def generate(loop):
 
             last_step_time = time.time()
 
-            # check if generation has been stopped
             if stopped:
-                stopped = False
-                raise GenerationExit()
+                pipe._interrupt = True
+                req.step_count = step
+
+            return cb_kwargs
 
         generator = utils.create_torch_generator(req.seed)
         pipeline = getattr(models[req.model], req.ptype)
+
+        prompt_embeds = models[req.model].compel_proc(req.prompt)
+        negative_prompt_embeds = (
+            models[req.model].compel_proc(req.negative_prompt)
+            if req.negative_prompt
+            else None
+        )
         base_kwargs = {
-            "prompt": req.prompt,
-            "negative_prompt": req.negative_prompt,
+            "prompt_embeds": prompt_embeds,
+            "negative_prompt_embeds": negative_prompt_embeds,
             "guidance_scale": req.guidance_scale,
             "num_inference_steps": req.step_count,
             "generator": generator,
-            "callback": callback,
+            "callback_on_step_end": callback,
         }
 
         try:
@@ -133,8 +137,6 @@ def generate(loop):
 
                 case "inpaint":
                     image = pipeline(**base_kwargs, image=req.mask).images[0]
-        except GenerationExit:
-            continue
         except Exception as e:
             traceback.print_exc()
             utils.edit(loop, interaction, utils.error(e))
@@ -147,7 +149,7 @@ def generate(loop):
         # save generated image
         pnginfo = PngInfo()
         pnginfo.add_text("prompt", req.prompt)
-        pnginfo.add_text("negative_prompt", req.negative_prompt)
+        pnginfo.add_text("negative_prompt", req.negative_prompt or "")
         pnginfo.add_text("guidance_scale", str(req.guidance_scale))
         pnginfo.add_text("step_count", str(req.step_count))
         pnginfo.add_text("seed", str(gen_seed))
@@ -170,12 +172,17 @@ def generate(loop):
         author = req.interaction.user
         embed.set_author(name=author.display_name, icon_url=author.avatar.url)
         embed.set_image(url=f"attachment://{filename}")
+
+        if stopped:
+            embed.set_footer("Generation stopped.")
+            stopped = False
+
         utils.add_fields(
             embed,
             {
                 "Model": req.model,
                 "Prompt": req.prompt,
-                "Negative Prompt": req.negative_prompt,
+                "Negative Prompt": req.negative_prompt or "",
                 "Guidance / CFG Scale": req.guidance_scale,
                 "Step Count": req.step_count,
                 "Scheduler / Sampler": "DPMSolverMultistepScheduler Karras++",
@@ -317,7 +324,7 @@ async def upscale_cmd(interaction: discord.Interaction, message_id: str = None):
                 f"Could not find message {message_id}!", ephemeral=True
             )
     else:
-        message = interaction.channel.last_message
+        message = await anext(interaction.channel.history(limit=1))
         if message is None:
             return await interaction.response.send_message(
                 "No messages in channel.", ephemeral=True
