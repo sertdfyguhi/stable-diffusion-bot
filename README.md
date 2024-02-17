@@ -6,6 +6,7 @@ A discord bot for stable diffusion image generation using diffusers.
 
 - **/text2img**: Generates an image using a text2img.
 - **/img2img**: Generates an image using a img2img.
+- **/upscale**: Upscales an image using ESRGAN.
 - **/stop**: Stops current generation.
 - **/stop_all**: Stops all generations requested by user.
 - **/models**: Lists all available models.
