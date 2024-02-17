@@ -1,7 +1,8 @@
 from diffusers.utils.loading_utils import load_image
 from PIL import Image, UnidentifiedImageError
-import config, pipelines, utils
 from threading import Thread
+import config, utils
+import numpy as np
 import traceback
 import discord
 import logging
@@ -12,6 +13,12 @@ import os
 
 NAME = "upscale"
 DESCRIPTION = "Upscales an image. If message ID and url is empty, the last message in the channel will be used."
+ARGUMENTS = {
+    "url": "An URL to an image.",
+    "message_id": "An ID of an message containing an image.",
+    "file": "An image file.",
+    "upscale": "The amount to upscale the image.",
+}
 
 logger = logging.getLogger("main")
 esrgan = None
@@ -25,17 +32,25 @@ def init():
         esrgan = utils.load_esrgan_model(config.ESRGAN_MODEL, config.DEVICE)
 
 
+@discord.app_commands.describe(
+    url="An URL to an image.",
+    message_id="An ID of an message containing an image.",
+    file="An image file.",
+    upscale="The amount to upscale the image.",
+)
 async def command(
     interaction: discord.Interaction,
     url: str = None,
     message_id: str = None,
+    file: discord.Attachment = None,
+    upscale: float = None,
 ):
     if config.ESRGAN_MODEL is None:
         return await interaction.response.send_message(
             "Upscaling is disabled on this bot.", ephemeral=True
         )
 
-    if message_id or (url is None):
+    if message_id or ((url is None) and (file is None)):
         if message_id:
             try:
                 message = await interaction.channel.fetch_message(int(message_id))
@@ -71,8 +86,14 @@ async def command(
                 f"There are no images attached to the message.", ephemeral=True
             )
 
-        image = Image.open(io.BytesIO(await attachment.read()))
-    else:
+        try:
+            # open file bytes as PIL image
+            image = Image.open(io.BytesIO(await attachment.read()))
+        except UnidentifiedImageError:
+            return await interaction.response.send_message(
+                "File could not be read as an image.", ephemeral=True
+            )
+    elif url:
         try:
             image = load_image(url)
         except UnidentifiedImageError:
@@ -83,22 +104,46 @@ async def command(
             return await interaction.response.send_message(
                 "Invalid URL.", ephemeral=True
             )
+    else:
+        if not file.content_type.startswith("image/"):
+            return await interaction.response.send_message(
+                "File provided is not an image.", ephemeral=True
+            )
+
+        try:
+            # open file bytes as PIL image
+            image = Image.open(io.BytesIO(await file.read()))
+        except UnidentifiedImageError:
+            return await interaction.response.send_message(
+                "File could not be read as an image.", ephemeral=True
+            )
 
     await interaction.response.send_message("Upscaling...")
     logger.info(f"Upscaling image on message {message_id}...")
 
     def worker(loop):
+        nonlocal file
+
         start_time = time.time()
+        np_image = np.array(image)
 
         try:
-            upscaled = pipelines.esrgan.upscale(esrgan, image)
+            output, _ = esrgan.enhance(np_image, outscale=upscale)
+        except RuntimeError:
+            return utils.edit(
+                loop,
+                interaction,
+                utils.error("Too much memory allocated. ping me ill fix it later"),
+            )
         except Exception as e:
             traceback.print_exc()
             return utils.edit(loop, interaction, utils.error(e))
 
         outpath = os.path.join(config.UPSCALED_DIR, f"{interaction.id}.png")
+        upscaled = Image.fromarray(output)
         upscaled.save(outpath)
 
+        # create embed
         embed = discord.Embed(
             title=f"Upscaled Image (Total Time: {time.time() - start_time:.2f}s)",
             color=config.PRIMARY_EMBED_COLOR,
@@ -111,18 +156,22 @@ async def command(
             embed,
             {
                 "Model": esrgan.model_name,
-                "Upscale": esrgan.scale,
+                "Upscale": f"x{upscale or esrgan.scale:g}",
                 "Size": f"{upscaled.width}x{upscaled.height}",
                 "Original Size": f"{image.width}x{image.height}",
             },
         )
 
-        file = discord.File(
+        dfile = discord.File(
             outpath,
             "upscaled.png",
-            spoiler=attachment.is_spoiler() if message_id or (url is None) else False,
+            spoiler=(
+                attachment.is_spoiler()
+                if message_id or ((url is None) and (file is None))
+                else False
+            ),
         )
-        utils.edit(loop, interaction, embed=embed, attachments=[file])
+        utils.edit(loop, interaction, embed=embed, attachments=[dfile])
 
         logger.info(f"Finished upscaling image on message {message_id}.")
 

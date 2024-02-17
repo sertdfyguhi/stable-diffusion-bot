@@ -6,6 +6,16 @@ import utils
 
 NAME = "img2img"
 DESCRIPTION = "Generates an image using img2img."
+ARGUMENTS = {
+    "model": "The model to use. /models to list all available models.",
+    "image_url": "An URL to an image.",
+    "prompt": "The text that guides the image generation.",
+    "negative_prompt": "The text that specifies what you don't want to see in the generated image.",
+    "guidance_scale": "A number that specifies how closely the image should follow your prompt.",
+    "step_count": "The number of sampling iterations in the generation process.",
+    "seed": "The number used to initialize the image generation. Used to reproduce images.",
+    "downscale_factor": "The amount to downscale the base image.",
+}
 
 
 def handle(

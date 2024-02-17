@@ -228,6 +228,7 @@ logger.info("Loading commands...")
 for module in pipelines.commands:
     # wrapper avoids module being overwritten by subsequent iterations
     def wrapper(module):
+        @discord.app_commands.describe(**module.ARGUMENTS)
         async def command(interaction: discord.Interaction, *args, **kwargs):
             global current_user_id
 
