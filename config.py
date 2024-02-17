@@ -18,8 +18,8 @@ DEVICE = "cuda"
 EMBEDDINGS = []
 LORAS = []
 
-PRIMARY_EMBED_COLOR = "#FF99BA"
-SECONDARY_EMBED_COLOR = "#FFC71C"
+PRIMARY_EMBED_COLOR_CODE = "#FF99BA"
+SECONDARY_EMBED_COLOR_CODE = "#FFC71C"
 
 MAX_WIDTH = 800
 MAX_HEIGHT = 1024
@@ -48,3 +48,10 @@ def pipeline_setup(pipeline):
     # DO NOT REMOVE unless you want a black image
     pipeline.orig_safety_checker = pipeline.safety_checker
     pipeline.safety_checker = None
+
+
+# dont change
+import utils
+
+PRIMARY_EMBED_COLOR = utils.get_embed_color(PRIMARY_EMBED_COLOR_CODE)
+SECONDARY_EMBED_COLOR = utils.get_embed_color(SECONDARY_EMBED_COLOR_CODE)

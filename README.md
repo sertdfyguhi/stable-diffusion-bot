@@ -35,5 +35,5 @@ py main.py
 
 - [x] Img2img generation
 - [x] Downscaling input image in img2img
-- [ ] Upscaling image
+- [x] Upscaling image
 - [ ] Inpaint generation

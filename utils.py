@@ -4,7 +4,7 @@
 import sys
 
 try:
-    import torchvision.transforms.functional_tensor  # noqa: F401
+    import torchvision.transforms.functional_tensor  # type: ignore
 except ImportError:
     try:
         import torchvision.transforms.functional as functional
@@ -19,7 +19,6 @@ from torchvision.transforms import ToTensor
 from pipeline import AllInOnePipeline
 from realesrgan import RealESRGANer
 from dataclasses import dataclass
-from termcolor import colored
 from torch import Generator
 from PIL import Image
 import numpy as np
@@ -84,10 +83,6 @@ GenerationRequest = (
 
 def error(msg):
     return f"**Error:** {msg}"
-
-
-def bold(msg: str) -> str:
-    return colored(msg, attrs=["bold"])
 
 
 def edit(

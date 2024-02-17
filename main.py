@@ -1,9 +1,9 @@
-from diffusers.utils.loading_utils import load_image
-from PIL import Image, UnidentifiedImageError
 from PIL.PngImagePlugin import PngInfo
+from colorama import Fore, Style
 from threading import Thread
 import pipelines
 import traceback
+import commands
 import discord
 import asyncio
 import inspect
@@ -16,17 +16,13 @@ import os
 
 
 # logging setup
-format_str = f"[%(asctime)s] {utils.bold('%(levelname)s')} :: {utils.bold('%(name)s')} - %(message)s"
+format_str = f"{Fore.YELLOW}[%(asctime)s] {Fore.CYAN}%(levelname)s{Fore.CYAN} :: %(name)s{Style.RESET_ALL} - %(message)s"
 logging.basicConfig(
     level=logging.DEBUG,
     format=format_str,
     datefmt="%d/%m/%Y %H:%M:%S",
 )
-logger = logging.getLogger(__name__)
-
-# load config embed colors
-primary_embed_color = utils.get_embed_color(config.PRIMARY_EMBED_COLOR)
-secondary_embed_color = utils.get_embed_color(config.SECONDARY_EMBED_COLOR)
+logger = logging.getLogger("main")
 
 # client setup
 intents = discord.Intents.default()
@@ -35,6 +31,7 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 tree = discord.app_commands.CommandTree(client)
 
+logger.info("Preparing bot...")
 logger.info("Loading models...")
 
 # load models into stable diffusion pipeline
@@ -46,11 +43,14 @@ models = utils.load_models(
     loras=config.LORAS,
 )
 
-# load ESRGAN model
-if config.ESRGAN_MODEL:
-    esrgan = utils.load_esrgan_model(config.ESRGAN_MODEL, config.DEVICE)
-
 logger.info("Finished loading models.")
+logger.info("Initializing commands...")
+
+for command in commands.commands:
+    if hasattr(command, "init"):
+        command.init()
+
+logger.info("Finished initializing commands.")
 
 
 current_user_id = None  # current generating user id
@@ -80,7 +80,7 @@ def generate(loop):
 
             embed = discord.Embed(
                 title=f"Generating... ({step}/{req.step_count})",
-                color=secondary_embed_color,
+                color=config.SECONDARY_EMBED_COLOR,
             )
             embed.set_image(url="attachment://preview.png")
             embed.add_field(name="Step Time", value=f"{now - last_step_time:.2f}s")
@@ -168,7 +168,7 @@ def generate(loop):
         # create embed
         embed = discord.Embed(
             title=f"Generated Image (Total Time: {time.time() - start_time:.2f}s)",
-            color=primary_embed_color,
+            color=config.PRIMARY_EMBED_COLOR,
         )
 
         author = req.interaction.user
@@ -222,7 +222,9 @@ async def stop_current_gen():
         await asyncio.sleep(0.1)
 
 
-# create discord commands
+logger.info("Loading commands...")
+
+# create discord commands for pipelines
 for module in pipelines.commands:
     # wrapper avoids module being overwritten by subsequent iterations
     def wrapper(module):
@@ -264,6 +266,10 @@ for module in pipelines.commands:
     command.__signature__ = inspect.signature(module.handle)
     tree.command(name=module.NAME, description=module.DESCRIPTION)(command)
 
+# create discord commands
+for command in commands.commands:
+    tree.command(name=command.NAME, description=command.DESCRIPTION)(command.command)
+
 
 @tree.command(name="stop", description="Stops generation.")
 async def stop_cmd(interaction: discord.Interaction):
@@ -293,122 +299,8 @@ async def stop_all_cmd(interaction: discord.Interaction):
     await interaction.edit_original_response(content="Stopped.")
 
 
-@tree.command(name="models", description="Lists all available models.")
-async def models_cmd(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="Models Available",
-        description="- " + "\n- ".join(models.keys()),
-        color=primary_embed_color,
-    )
-
-    await interaction.response.send_message(embed=embed)
-
-
-@tree.command(
-    name="upscale",
-    description="Upscales an image. If message ID and url is empty, the last message in the channel will be used.",
-)
-async def upscale_cmd(
-    interaction: discord.Interaction, url: str = None, message_id: str = None
-):
-    if config.ESRGAN_MODEL is None:
-        return await interaction.response.send_message(
-            "Upscaling is disabled on this bot.", ephemeral=True
-        )
-
-    if message_id or (url is None):
-        if message_id:
-            try:
-                message = await interaction.channel.fetch_message(int(message_id))
-            except ValueError:
-                return await interaction.response.send_message(
-                    "Message ID is not an ID.", ephemeral=True
-                )
-            except Exception:
-                return await interaction.response.send_message(
-                    f"Could not find message {message_id}!", ephemeral=True
-                )
-        else:
-            message = await anext(interaction.channel.history(limit=1))
-            if message is None:
-                return await interaction.response.send_message(
-                    "No messages in channel.", ephemeral=True
-                )
-
-        attachments = message.attachments
-        if len(attachments) == 0:
-            return await interaction.response.send_message(
-                f"There are no attachments attached to the message.", ephemeral=True
-            )
-
-        try:
-            attachment = next(
-                attachment
-                for attachment in attachments
-                if attachment.content_type.startswith("image")
-            )
-        except StopIteration:
-            return await interaction.response.send_message(
-                f"There are no images attached to the message.", ephemeral=True
-            )
-
-        image = Image.open(io.BytesIO(await attachment.read()))
-    else:
-        try:
-            image = load_image(url)
-        except UnidentifiedImageError:
-            return await interaction.response.send_message(
-                "URL response could not be read as an image.", ephemeral=True
-            )
-        except ValueError:
-            return await interaction.response.send_message(
-                "Invalid URL.", ephemeral=True
-            )
-
-    await interaction.response.send_message("Upscaling...")
-    logger.info(f"Upscaling image on message {message_id}...")
-
-    def worker(loop):
-        start_time = time.time()
-
-        try:
-            upscaled = pipelines.esrgan.upscale(esrgan, image)
-        except Exception as e:
-            traceback.print_exc()
-            return utils.edit(loop, interaction, utils.error(e))
-
-        outpath = os.path.join(config.UPSCALED_DIR, f"{interaction.id}.png")
-        upscaled.save(outpath)
-
-        embed = discord.Embed(
-            title=f"Upscaled Image (Total Time: {time.time() - start_time:.2f}s)",
-            color=primary_embed_color,
-        )
-        embed.set_author(
-            name=interaction.user.display_name, icon_url=interaction.user.avatar.url
-        )
-        embed.set_image(url="attachment://upscaled.png")
-        utils.add_fields(
-            embed,
-            {
-                "Model": esrgan.model_name,
-                "Upscale": esrgan.scale,
-                "Size": f"{upscaled.width}x{upscaled.height}",
-                "Original Size": f"{image.width}x{image.height}",
-            },
-        )
-
-        file = discord.File(
-            outpath,
-            "upscaled.png",
-            spoiler=attachment.is_spoiler() if message_id or (url is None) else False,
-        )
-        utils.edit(loop, interaction, embed=embed, attachments=[file])
-
-        logger.info(f"Finished upscaling image on message {message_id}.")
-
-    thread = Thread(target=worker, args=(asyncio.get_event_loop(),))
-    thread.start()
+logger.info("Finished loading commands.")
+logger.info("Finished bot preparations.")
 
 
 @client.event
@@ -418,4 +310,4 @@ async def on_ready():
 
 
 if __name__ == "__main__":
-    client.run(config.TOKEN)
+    client.run(config.TOKEN, log_level=logging.WARNING)
