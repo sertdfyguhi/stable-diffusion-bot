@@ -50,73 +50,19 @@ async def command(
             "Upscaling is disabled on this bot.", ephemeral=True
         )
 
-    if message_id or ((url is None) and (file is None)):
-        if message_id:
-            try:
-                message = await interaction.channel.fetch_message(int(message_id))
-            except ValueError:
-                return await interaction.response.send_message(
-                    "Message ID is not an ID.", ephemeral=True
-                )
-            except Exception:
-                return await interaction.response.send_message(
-                    f"Could not find message {message_id}!", ephemeral=True
-                )
-        else:
+    try:
+        if message_id is None and url is None and file is None:
             message = await anext(interaction.channel.history(limit=1))
             if message is None:
-                return await interaction.response.send_message(
-                    "No messages in channel.", ephemeral=True
-                )
+                raise ValueError("No messages in channel.")
 
-        attachments = message.attachments
-        if len(attachments) == 0:
-            return await interaction.response.send_message(
-                f"There are no attachments attached to the message.", ephemeral=True
+            image, attachment = await utils.load_image_from_message(message)
+        else:
+            image, attachment = await utils.load_image_from_args(
+                message_id, url, file, interaction.channel
             )
-
-        try:
-            attachment = next(
-                attachment
-                for attachment in attachments
-                if attachment.content_type.startswith("image")
-            )
-        except StopIteration:
-            return await interaction.response.send_message(
-                f"There are no images attached to the message.", ephemeral=True
-            )
-
-        try:
-            # open file bytes as PIL image
-            image = Image.open(io.BytesIO(await attachment.read()))
-        except UnidentifiedImageError:
-            return await interaction.response.send_message(
-                "File could not be read as an image.", ephemeral=True
-            )
-    elif url:
-        try:
-            image = load_image(url)
-        except UnidentifiedImageError:
-            return await interaction.response.send_message(
-                "URL response could not be read as an image.", ephemeral=True
-            )
-        except ValueError:
-            return await interaction.response.send_message(
-                "Invalid URL.", ephemeral=True
-            )
-    else:
-        if not file.content_type.startswith("image/"):
-            return await interaction.response.send_message(
-                "File provided is not an image.", ephemeral=True
-            )
-
-        try:
-            # open file bytes as PIL image
-            image = Image.open(io.BytesIO(await file.read()))
-        except UnidentifiedImageError:
-            return await interaction.response.send_message(
-                "File could not be read as an image.", ephemeral=True
-            )
+    except ValueError as e:
+        return await interaction.response.send_message(str(e), ephemeral=True)
 
     await interaction.response.send_message("Upscaling...")
     logger.info(f"Upscaling image on message {message_id}...")
@@ -129,7 +75,8 @@ async def command(
 
         try:
             output, _ = esrgan.enhance(np_image, outscale=upscale)
-        except RuntimeError:
+        except RuntimeError as e:
+            logger.error(e)
             return utils.edit(
                 loop,
                 interaction,

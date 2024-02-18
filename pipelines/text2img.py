@@ -16,7 +16,7 @@ ARGUMENTS = {
 }
 
 
-def handle(
+async def handle(
     interaction: discord.Interaction,
     model: str,
     prompt: str,
@@ -29,15 +29,15 @@ def handle(
 ):
     # validate parameters
     if width > config.MAX_WIDTH:
-        return ValueError(
+        raise ValueError(
             f"Width ({width}) cannot be higher than {config.MAX_WIDTH} pixels."
         )
     elif height > config.MAX_HEIGHT:
-        return ValueError(
+        raise ValueError(
             f"Height ({height}) cannot be higher than {config.MAX_HEIGHT} pixels."
         )
     elif seed and not seed.isnumeric():
-        return ValueError("Seed must be a number.")
+        raise ValueError("Seed must be a number.")
 
     return utils.Text2ImgGenerationRequest(
         interaction,

@@ -1,5 +1,4 @@
-from diffusers.utils.loading_utils import load_image
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 import discord
 import config
 import utils
@@ -8,7 +7,9 @@ NAME = "img2img"
 DESCRIPTION = "Generates an image using img2img."
 ARGUMENTS = {
     "model": "The model to use. /models to list all available models.",
-    "image_url": "An URL to an image.",
+    "image_url": "An URL to the base image.",
+    "image_message_id": "A message ID to a message containing the base image.",
+    "image_file": "The base image.",
     "prompt": "The text that guides the image generation.",
     "negative_prompt": "The text that specifies what you don't want to see in the generated image.",
     "guidance_scale": "A number that specifies how closely the image should follow your prompt.",
@@ -18,26 +19,25 @@ ARGUMENTS = {
 }
 
 
-def handle(
+async def handle(
     interaction: discord.Interaction,
     model: str,
-    image_url: str,
     prompt: str,
     negative_prompt: str = None,
     guidance_scale: float = 8.0,
     step_count: int = 14,
     seed: str = None,
     downscale_factor: float = 1.0,
+    image_url: str = None,
+    image_message_id: str = None,
+    image_file: discord.Attachment = None,
 ):
     if seed and not seed.isnumeric():
         return ValueError("Seed must be a number.")
 
-    try:
-        image = load_image(image_url)
-    except UnidentifiedImageError:
-        raise ValueError("URL response could not be read as an image.")
-    except ValueError:
-        raise ValueError("Invalid URL.")
+    image, _ = await utils.load_image_from_args(
+        image_message_id, image_url, image_file, interaction.channel
+    )
 
     # downscale image by factor
     new_width = int(image.size[0] / downscale_factor)

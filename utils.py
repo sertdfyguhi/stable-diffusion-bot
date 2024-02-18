@@ -13,19 +13,21 @@ except ImportError:
     except ImportError:
         pass  # shrug...
 
+from diffusers.utils.loading_utils import load_image
 from basicsr.archs.rrdbnet_arch import RRDBNet
+from PIL import Image, UnidentifiedImageError
 from diffusers import StableDiffusionPipeline
 from torchvision.transforms import ToTensor
 from pipeline import AllInOnePipeline
 from realesrgan import RealESRGANer
 from dataclasses import dataclass
 from torch import Generator
-from PIL import Image
 import numpy as np
 import discord
 import asyncio
 import torch
 import os
+import io
 
 to_tensor = ToTensor()
 
@@ -237,3 +239,67 @@ def get_embed_color(color: str | list | tuple) -> discord.Colour:
 
 def get_filename(path: str) -> str:
     return os.path.basename(path).split(".")[0]
+
+
+async def load_image_from_message(
+    message: discord.Message,
+) -> tuple[Image.Image, discord.Attachment]:
+    attachments = message.attachments
+    if len(attachments) == 0:
+        raise ValueError(f"There are no attachments attached to the message.")
+
+    try:
+        attachment = next(
+            attachment
+            for attachment in attachments
+            if attachment.content_type.startswith("image")
+        )
+    except StopIteration:
+        raise ValueError(f"There are no images attached to the message.")
+
+    try:
+        # open file bytes as PIL image
+        image = Image.open(io.BytesIO(await attachment.read()))
+    except UnidentifiedImageError:
+        raise ValueError("File could not be read as an image.")
+
+    return image, attachment
+
+
+async def load_image_from_args(
+    message_id: str = None,
+    url: str = None,
+    file: discord.Attachment = None,
+    channel: discord.TextChannel = None,
+) -> tuple[Image.Image, None | discord.Attachment]:
+    attachment = None
+
+    if message_id:
+        try:
+            message = await channel.fetch_message(int(message_id))
+        except ValueError:
+            raise ValueError("Message ID is not an ID.")
+        except Exception:
+            raise ValueError(f"Could not find message {message_id}!")
+
+        image, attachment = await load_image_from_message(message)
+    elif url:
+        try:
+            image = load_image(url)
+        except UnidentifiedImageError:
+            raise ValueError("URL response could not be read as an image.")
+        except ValueError:
+            raise ValueError("Invalid URL.")
+    elif file:
+        if not file.content_type.startswith("image/"):
+            raise ValueError("File provided is not an image.")
+
+        try:
+            # open file bytes as PIL image
+            image = Image.open(io.BytesIO(await file.read()))
+        except UnidentifiedImageError:
+            raise ValueError("File could not be read as an image.")
+    else:
+        raise ValueError("No image provided.")
+
+    return image, attachment

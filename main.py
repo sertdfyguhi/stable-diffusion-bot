@@ -22,6 +22,8 @@ logging.basicConfig(
     format=format_str,
     datefmt="%d/%m/%Y %H:%M:%S",
 )
+# remove useless debug info from PIL
+logging.getLogger("PIL").setLevel(logging.WARNING)
 logger = logging.getLogger("main")
 
 # client setup
@@ -233,16 +235,23 @@ for module in pipelines.commands:
             global current_user_id
 
             try:
-                res = module.handle(interaction, *args, **kwargs)
+                res = await module.handle(interaction, *args, **kwargs)
+            except ValueError as e:
+                return await interaction.response.send_message(
+                    str(e), ephemeral=True
+                )
             except Exception as e:
-                return await interaction.response.send_message(utils.error(e))
+                return await interaction.response.send_message(
+                    utils.error(e), ephemeral=True
+                )
 
             # validate parameters
             if res.model not in models:
                 return await interaction.response.send_message(
                     utils.error(
                         f'No model named "{res.model}". List all available models using /models.'
-                    )
+                    ),
+                    ephemeral=True,
                 )
 
             queue.append(res)
